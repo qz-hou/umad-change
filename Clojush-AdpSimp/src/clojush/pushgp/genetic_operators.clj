@@ -610,24 +610,41 @@ given by uniform-deletion-rate.
   element of the genome may possibly be deleted. Probabilities are given by 
   uniform-addition-and-deletion-rate.
   Works with Plushy genomes."
-  [ind {:keys [uniform-addition-and-deletion-rate maintain-ancestors atom-generators] 
+  [ind {:keys [uniform-addition-and-deletion-rate maintain-ancestors atom-generators]
         :as argmap}]
-  (let [addition-rate (random-element-or-identity-if-not-a-collection uniform-addition-and-deletion-rate)
+  (let [additions (atom '())
+        deletions (atom '())
+        addition-rate (random-element-or-identity-if-not-a-collection uniform-addition-and-deletion-rate)
         deletion-rate (if (zero? addition-rate)
                         0
                         (/ 1 (+ (/ 1 addition-rate) 1)))
         after-addition (vec (apply concat
                                    (mapv #(if (< (lrand) addition-rate)
-                                            (lshuffle [% 
-                                                       (random-genome-gene
-                                                         atom-generators argmap)])
+                                            (lshuffle [%
+                                                       (let [gene (if (< (lrand) 0.75)
+                                                         (if (= (:passed-set @the-map) #{})
+                                                           (random-genome-gene atom-generators argmap)
+                                                           (rand-nth (seq (:passed-set @the-map))))
+                                                         ;(rand-nth (:genome (select population argmap)))
+                                                         (do (let [cure (random-genome-gene atom-generators argmap)]
+                                                           (when (contains? (:failed-set @the-map) cure)
+                                                             (random-genome-gene atom-generators argmap)))))]
+                                                         (swap! additions conj gene)
+                                                         gene)])
                                             [%])
                                          (:genome ind))))
         new-genome (vec (filter identity
-                                (mapv #(if (< (lrand) deletion-rate) nil %)
+                                (mapv #(if (< (lrand) deletion-rate)
+                                         (do
+                                           (swap! deletions conj %)
+                                           nil)
+                                         %)
                                       after-addition)))]
     (make-individual :genome new-genome
                      :history (:history ind)
+                     :additions additions
+                     :deletions deletions
+                     :parent-error-vector (:error-vector ind)
                      :grain-size (compute-grain-size new-genome ind argmap)
                      :ancestors (if maintain-ancestors
                                   (cons (:genome ind) (:ancestors ind))

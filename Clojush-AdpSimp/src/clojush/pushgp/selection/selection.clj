@@ -1,7 +1,7 @@
 (ns clojush.pushgp.selection.selection
   (:use [clojush globals random]
         [clojush.pushgp.selection preselection tournament lexicase epsilon-lexicase
-         elitegroup-lexicase random-threshold-lexicase random-toggle-lexicase
+         elitegroup-lexicase random-threshold-lexicase random-toggle-lexicase 
          randomly-truncated-lexicase novelty rarified-lexicase subset-tournament
          fitness-proportionate]))
 
@@ -51,3 +51,4 @@
              [(:uuid selected)]
              (fn [sel-count] (if (nil? sel-count) 1 (inc sel-count)))))
     selected))
+
