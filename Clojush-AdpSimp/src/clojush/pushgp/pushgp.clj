@@ -64,11 +64,11 @@
                          (if (pos? num-remaining)
                            (let [new-seeds (repeatedly num-remaining
                                                        #(random/lrand-bytes
-                                                          (:mersennetwister random/*seed-length*)))]
+                                                        (:mersennetwister random/*seed-length*)))]
                              (recur (list-concat seeds (filter ; only add seeds that we do not already have
-                                                         (fn [candidate]
-                                                           (not (some #(random/=byte-array % candidate)
-                                                                      seeds))) new-seeds))))
+                                                        (fn [candidate]
+                                                          (not (some #(random/=byte-array % candidate)
+                                                                    seeds))) new-seeds))))
                            seeds)))]
     {:random-seeds random-seeds
      :rand-gens (vec (doall (for [k (range population-size)]
@@ -172,7 +172,7 @@
   "Processes the generation, returning [new novelty archive, return val],
    where new novelty archive will be nil if we are done."
   [rand-gens pop-agents child-agents generation novelty-archive
-   {:keys [population-size use-single-thread passed-func failed-func] :as argmap}]
+   {:keys [population-size use-single-thread] :as argmap}]
   (r/new-generation! generation)
   (println "Processing generation:" generation)
   (case (:genome-representation @push-argmap)
@@ -293,7 +293,11 @@
                                       (when-not (:use-single-thread @push-argmap (apply await pop-agents))) ;; SYNCHRONIZE
                                       (reset! delay-archive [])))
                                   (timer @push-argmap :report)
-                                  (repeatedly 50 (fn [] (auto-simplify-plush (select (map #(deref %) pop-agents) @push-argmap) (:error-function @push-argmap) 25 0 passed-func failed-func)))
+                                  (println "start simp")
+                                  (repeatedly 50 (let [vectorr
+                                                       (auto-simplify-plush (select (map #(deref %) pop-agents) @push-argmap) (:error-function @push-argmap) (:training-cases @push-argmap) 10 0)]))
+                                  (prn "passed are:" (:passed-set @the-map))
+                                  (prn "failed are:" (:failed-set @the-map))
                                   (println "\nProducing offspring...") (flush)
                                   (produce-new-offspring pop-agents
                                                          child-agents
@@ -320,8 +324,21 @@
         (swap! adaptive-source conj {:instruction key :count value :dcdf (+ value dcdf)})
         (recur (+ dcdf value) (dissoc counts key))))))
 
+
+(defn add-new-neg-instructions
+  [cts]
+  (println "cts before adding neg" cts)
+  (loop [dcdf (:dcdf (last @adaptive-source))
+         counts cts]
+    (when (seq counts)
+      (let [key (first (keys counts))
+            value (get counts key)]
+        (swap! adaptive-source conj {:instruction key :count value :dcdf (+ value dcdf)})
+        (recur (+ dcdf value) (dissoc counts key))))))
+
 (defn update-pos-adaptive-source
   [cts]
+  (println "pos is working")
   (loop [dcdf 0
          index 0
          counts cts]
@@ -333,37 +350,49 @@
             addition (get counts instr 0)
             newcount (+ currcount addition)
             newdcdf (+ dcdf newcount)]
+        (println "addition in pos" addition)
         (swap! adaptive-source #(assoc-in % [index] {:instruction instr :count newcount :dcdf newdcdf}))
         (recur newdcdf (inc index) (dissoc counts instr))))))
 
 (defn update-neg-adaptive-source
   [cts]
+  (println "nbeg is working")
   (loop [dcdf 0
          index 0
          counts cts]
     (if (= index (count @adaptive-source))
-      (add-new-instructions counts)
+      (add-new-neg-instructions counts)
       (let [item (nth @adaptive-source index)
             instr (:instruction item)
             currcount (:count item)
             addition (get counts instr 0)
             newcount (- currcount addition)
             newdcdf (+ dcdf newcount)]
-        (when (< newcount deepest)
-          (reset! deepest newcount))
+        (when (< newcount 1)
+          (loop [index 0]
+            (let [nitem (nth @adaptive-source index)
+                  ncurrcount (:count nitem)
+                  ncount (inc ncurrcount)]
+              (swap! adaptive-source #(assoc-in % [index] {:count ncount}))
+              (when (< index (count @adaptive-source))
+                (println "index" index "count" (count @adaptive-source))
+                (recur (inc (- index 1)))))))
+        (println "addition" addition "newcount" newcount "old count: " currcount)
         (swap! adaptive-source #(assoc-in % [index] {:instruction instr :count newcount :dcdf newdcdf}))
         (recur newdcdf (inc index) (dissoc counts instr))))))
 
 (defn process-adaptive-source
   "Updates the adaptive genetic source for each generation."
   []
+  (println "current pass: " @current-passed-instructions)
+  (println "current fail: " @current-failed-instructions)
   (let [counts (frequencies @current-passed-instructions)]
     (reset! current-passed-instructions [])
     (update-pos-adaptive-source counts))
   (let [counts (frequencies @current-failed-instructions)]
     (reset! current-failed-instructions [])
     (update-neg-adaptive-source counts)))
-  
+
 
 (defn finish-up
   [return-val]
@@ -394,8 +423,10 @@
        (r/config-data! [:initialization-ms] (:initialization @timer-atom)))
      (println "\n;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;")
      ;; Code to initialize the starting adaptive genetic source.
+     (println "initializing adaptive")
      (doseq [[index instruction] (map-indexed vector (:atom-generators @push-argmap))]
        (swap! adaptive-source conj {:instruction instruction :count 1 :dcdf (inc index)}))
+     (println "initial adp is " adaptive-source)
      (println "\nGenerating initial population...") (flush)
      (let [pop-agents (make-pop-agents @push-argmap)
            child-agents (make-child-agents @push-argmap)
@@ -407,6 +438,9 @@
                                    generation novelty-archive @push-argmap)]
            ;; Generation has been processed; now process the adaptive source
            (process-adaptive-source)
+           (println "adaptive now is: " )
+           (doseq [item @adaptive-source]
+             (println item))
            (if (nil? next-novelty-archive)
              (finish-up return-val)
              (recur (inc generation) next-novelty-archive))))))))

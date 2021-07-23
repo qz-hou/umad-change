@@ -12,7 +12,7 @@
     (cond
       ; Check if reversed-prog is empty, in which case we are done
       (empty? reversed-prog) (vec (reverse new-prog))
-      ; Check if done, which is if we've found the first :close, the paren-stack is empty, and 
+      ; Check if done, which is if we've found the first :close, the paren-stack is empty, and
       ; the first item in reversed-prog is :open
       (and found-first-close
            (zero? number-close-parens)
@@ -65,36 +65,36 @@
   (if program
     program
     (let [translated-program
-          (loop [prog [] 
+          (loop [prog []
                  ; The Push program incrementally being built
-                 
-                 gn genome 
-                 ; The linear Plush genome, where items will be popped off the 
-                 ; front. Each item is a map containing at least the key 
+
+                 gn genome
+                 ; The linear Plush genome, where items will be popped off the
+                 ; front. Each item is a map containing at least the key
                  ; :instruction, and unless the program is flat, also :close
-                 
-                 num-parens-here 0 
-                 ; The number of parens that still need to be added at this 
+
+                 num-parens-here 0
+                 ; The number of parens that still need to be added at this
                  ; location.
-                 
-                 paren-stack '() 
-                 ; Whenever an instruction requires parens grouping, it will 
-                 ; push either :close or :close-open on this stack. This will 
-                 ; indicate what to insert in the program the next time a paren 
+
+                 paren-stack '()
+                 ; Whenever an instruction requires parens grouping, it will
+                 ; push either :close or :close-open on this stack. This will
+                 ; indicate what to insert in the program the next time a paren
                  ; is indicated by the :close key in the instruction map.
                  ]
             (cond
               ; Check if need to add close parens here
-              (< 0 num-parens-here) 
+              (< 0 num-parens-here)
               (recur (cond
-                       (= (first paren-stack) :close) 
+                       (= (first paren-stack) :close)
                        (conj prog :close)
                        ;
-                       (= (first paren-stack) :close-open) 
+                       (= (first paren-stack) :close-open)
                        (conj (conj prog :close) :open)
-                       ; 
-                       ; If paren-stack is empty, we won't put any parens in 
-                       ; even though the :close epigenetic marker indicated to 
+                       ;
+                       ; If paren-stack is empty, we won't put any parens in
+                       ; even though the :close epigenetic marker indicated to
                        ; do so
                        :else prog
                        )
@@ -109,7 +109,7 @@
                      (count paren-stack)
                      paren-stack)
               ; Check if done
-              (empty? gn) 
+              (empty? gn)
               (open-close-sequence-to-list (apply list prog))
               ; Check for no-oped instruction. This instruction will be replaced
               ; by exec_noop, but will still have effects like :close count
@@ -125,11 +125,11 @@
                      num-parens-here
                      paren-stack)
               ; If here, ready for next instruction
-              :else (let [number-paren-groups (lookup-instruction-paren-groups 
+              :else (let [number-paren-groups (lookup-instruction-paren-groups
                                                 (:instruction (first gn)))
                           new-paren-stack (if (>= 0 number-paren-groups)
                                             paren-stack
-                                            (list-concat (repeat (dec number-paren-groups) 
+                                            (list-concat (repeat (dec number-paren-groups)
                                                                  :close-open)
                                                          '(:close)
                                                          paren-stack))]
@@ -144,7 +144,7 @@
                                    (conj prog (:instruction (first gn)))
                                    (conj (conj prog (:instruction (first gn))) :open)))
                                (rest gn)
-                               (get (first gn) :close 0) 
+                               (get (first gn) :close 0)
                                ; ^ The number of close parens to put after this instruction;
                                ; if :close isn't in instruction map, default to zero
                                new-paren-stack)))))]

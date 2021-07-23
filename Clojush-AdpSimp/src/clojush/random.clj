@@ -46,7 +46,6 @@
 
 (def current-failed-instructions (atom []))
 
-(def deepest (atom 0))
 
 ;; Total distribution of instructions across all generations.
 (def adaptive-source (atom []))
@@ -60,6 +59,9 @@
 ;;         (fn-element)
 ;;         fn-element))
 ;;     element))
+
+(def the-map (atom {:passed-set #{} :failed-set #{}}))
+
 
 (defn subparse
   "Mimics the random-atom function to execute functional atoms before return."
@@ -244,4 +246,3 @@
                                     atom-generators
                                     argmap)}
       argmap)))
-
